@@ -1,0 +1,188 @@
+---
+title: "Residuals and mean centering"
+author: "Jeanette Mumford"
+date: "10/13/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+Hi!  I decided to stick the code I mentioned into a markdown, so you can see the output without having to run the code.  Some of this code is what I used to generate the images and examples for lecture and some was used to answer your questions.
+
+## Mean centering
+Just to review, there's nothing wrong with mean centering other than it is often done when not needed or folks think it is doing something that it isn't.  Here I focus on the idea that mean centering regressors is important when you have interaction terms because it reduces collinearity.  Does it reduce collinearity?  Yes, it does!  Is that collinearity a "problem"?  No it isn't.  Collinearity is only an issue if you're interpretation of that parameter is done without needing other parameters in the model.  In this example, we cannot fully interpret an interaction effect without taking into account the main effects as well, so we're okay if the collinearity is only arising between main effects and the interaction effect.  I will go into more detail below in the code.  On the other hand, if I have a model with two regressors that are unrelated, theoretically, that I'm interpreting independently but are highly correlated, that's a collinearity problem we MUST fix...although fixing is often impossible.  I'll include an example of that as well.
+
+First, the interaction model, where the collinearity is not an issue in terms of interpretation, etc.
+
+```{r, message=FALSE}
+library(HH)  # This has a vif function in it
+library(MASS)
+library(viridis)
+library(gtools)
+library(ggplot2)
+
+set.seed(12345)
+x1 <- rnorm(100,20,2)
+x2 <- rnorm(100,10,2)
+
+y <- 1 + 2*x1 + 3*x2 + .5*x1*x2 + rnorm(100, sd = 3)
+
+mod <- lm(y ~ x1*x2)
+vif(mod)  #oh no!! (not really)  Goal is <5
+summary(mod)
+
+x1_mc <- x1 - mean(x1)
+x2_mc <- x2 - mean(x2)
+
+mod_mc <- lm(y ~ x1_mc*x2_mc)
+vif(mod_mc) # all "fixed"
+summary(mod_mc)  # but nothing really changes (at all)
+```
+
+If you compare the model output above you can see the model fits are exactly the same and the only parameter for which you should be looking at the inference (the interaction) everything matches.  Generally, you don't worry about significance of main effects or lower level terms if the higher level terms are significant.  You still need them in your model whether or not they're significant.
+
+So, why isn't collinearity an issue in this case?  Because all of the covariates that are involved in the collinearity must be used together to properly interpret the model.  By this I mean I cannot interpret the interaction *without* also looking at the main effects.  For example, what if I want to illustrate my interaction by plotting the relationship of y and x1 for the mean level of x2?  Here's how I'd compute that.
+
+```{r}
+# first I need the mean of x2
+mn_x2 <-  mean(x2)
+mn_x2
+
+# I'll also plot +/- 1 SD from the mean
+# be careful if you do this that +/- 1 SD is actually within the range of your 
+# regressor (x1)
+# Sometimes, with skewed variables it can pop out of the range of your data.
+mn_plus_sd_x2 <- mean(x2) + sd(x2)
+mn_minus_sd_x2 <- mean(x2) - sd(x2)
+
+# Then I need the coefficients, I'll start using the uncentered regressor model
+mod_coeff <- mod$coeff
+mod_coeff
+
+# Now I can generate a predicted y based on a range of x1 values and my mean 
+# x2 value for a plot.  
+# I'm just going to use a range of values from the min to max of x1.  
+# These are just estimated predictions based on our model fit.
+
+x1_vals = seq(min(x1), max(x1), length = 50)
+x1_vals
+
+# be careful when doing this that you are using the coeff's in the proper order
+
+y_pred1_x2_mn = mod_coeff[1] + mod_coeff[2]*x1_vals + mod_coeff[3]*mn_x2 + 
+  mod_coeff[4]*mn_x2*x1_vals
+y_pred1_x2_mn_plus_sd = mod_coeff[1] + mod_coeff[2]*x1_vals + 
+  mod_coeff[3]*mn_plus_sd_x2 + mod_coeff[4]*mn_plus_sd_x2*x1_vals
+y_pred1_x2_mn_minus_sd = mod_coeff[1] + mod_coeff[2]*x1_vals + 
+  mod_coeff[3]*mn_minus_sd_x2 + mod_coeff[4]*mn_minus_sd_x2*x1_vals
+
+#plot
+# Just using a simple plot, but ggplot is great too! 
+
+plot(x1_vals, y_pred1_x2_mn, type = 'l', col = 'orange', lwd = 2, xlab = "X1", 
+     ylab = "Predicted Y",
+     ylim = c(110, 250))
+lines(x1_vals, y_pred1_x2_mn_plus_sd, lwd = 2, col = 'dodgerblue2')
+lines(x1_vals, y_pred1_x2_mn_minus_sd, lwd = 2, col = 'darkolivegreen4')
+legend('topleft', c("Mean(X2) + SD(X2)", "Mean(X2)", "Mean(X2) - SD(X2)"), 
+       lwd = 2, 
+  col = c("dodgerblue2", "orange", "darkolivegreen4"), bty = 'n')
+
+# If I use the coefficients from the second model it doesn't matter, I get the 
+# exact same values.  For simplicity, I'll illustrate with just the mean(x2)
+
+#notably, x2 has a different meaning in this model, as does x1, so I must use 
+# 0 for the mean of x2 and my x1 range is different
+x1_vals_dm = seq(min(x1_mc), max(x1_mc), length = 50)
+mod_mc_coeff <- mod_mc$coeff
+y_pred1_x2_mn_mc_coeff = mod_mc_coeff[1] + mod_mc_coeff[2]*x1_vals_dm + 
+  mod_mc_coeff[3]*0 + mod_mc_coeff[4]*0*x1_vals_dm
+
+# If the values match they'll fall on a line with a slope of 1 and 
+# intercept of 0
+plot(y_pred1_x2_mn, y_pred1_x2_mn_mc_coeff)
+abline(a=0, b = 1) 
+# the values match exactly!  You can show this for mean - sd too 
+
+x2_dm_mean_plus_sd = 0 + sd(x2_mc)
+
+y_pred1_x2_mn_plus_sd_mn_mc_coeff = mod_mc_coeff[1] + 
+  mod_mc_coeff[2]*x1_vals_dm + mod_mc_coeff[3]*x2_dm_mean_plus_sd + 
+  mod_mc_coeff[4]*x2_dm_mean_plus_sd*x1_vals_dm
+plot(y_pred1_x2_mn_plus_sd, y_pred1_x2_mn_plus_sd_mn_mc_coeff)
+abline(a=0, b = 1) 
+
+#So predictions match for mean + sd as well.  Hopefully that convinces you that
+# it doesn't matter if I mean center or not.
+
+```
+
+On the other hand, what if I'm looking at the reaction time as a function of age and caffeine intake and I have an extremely strong correlation between age and caffeine?  These are simulated data and different from the data I used in the slide for the example of adjusting covariates.
+
+```{r}
+# Igore this, just making up some fake data that will have a collinearity issue!
+mu_vec = c(82, 50, 1.5)
+s_mat = matrix(c(30^2, -290, 6, 
+                 -290, 10^2, -3,
+                 6, -3, 2.75^2),
+               nrow = 3)
+s_mat
+cov2cor(s_mat)
+set.seed(2010)
+dat = data.frame(mvrnorm(n=200, mu = mu_vec, s_mat))
+names(dat) = c("caffeine", "age", "rt")
+
+mod = lm(rt ~ caffeine + age, dat)
+vif(mod)  # the VIF is over 5, not good
+summary(mod)
+```
+
+In the above you'll see the VIF is quite high.  In this case we're interested in interpreting each parameter estimate, alone.  In other words, to fully interpret caffeine, I don't need to combine the caffeine parameter with any other parameter in the model.  Compare this to the interaction model, where I had to use the main effects along with the interaction effect to describe what was happening.  In that case, the variables involved in the collinearity are all combined to understand the effect.  In this case we study each one, separately, albeit it is adjusted for the other variables in the model.  In this case we should not proceed with this model.  There's no fix for collinearity in this model due to the high correlation between caffeine and age.  They're basically doing the same thing in the model and don't have enough unique variability to tell their own story.  An anaolgy I often use is gathering information from eyewitnesses in an accident.  If they all are telling the same story, you don't need multiple eyewitnesses, just one.  Here you'd need to cut your loses and report that age and caffeine were highly correlated and so you have no way to tease apart each variable's unique contribution.
+
+In the case of fMRI models with collinearity, sometimes we can reparamterize and fix it, but it is typically an issue that should be carefully thought through when designing the experiment.
+
+If interested, see my [paper on orthogonalization](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0126255).  I have [a video](https://mumfordbrainstats.tumblr.com/post/133793339516/collinearityis-orthogonalization-the-answer) on it as well on MumfordBrainStats.  Folks often think this fixes collinearity in fMRI but leads to HUGE misinterpretations.  I've seen plenty.  In fact I was asked to write this paper so a friend would have a reference to point to when reviewing papers making this error :) 
+
+## Adjusted regression
+
+This is the exact code I used to make the residual plots.  Since I set a seed for this one you'll get the exact plots I used in my slides.  I'm including this for those who were interested to see how I derived the residuals for the plot. 
+
+```{r}
+#ignore, I'm just making up some fake data...
+mu_vec = c(82, 50, 1.5)
+s_mat = matrix(c(30^2, -200, 5, 
+                 -200, 10^2, -3,
+                 5, -3, .5^2),
+               nrow = 3)
+set.seed(1980)
+dat = data.frame(mvrnorm(n=200, mu = mu_vec, s_mat))
+names(dat) = c("caffeine", "age", "rt")
+
+
+ggplot(dat, aes(x = caffeine, y = rt, color = age)) +
+  geom_point()+ scale_color_viridis() + 
+  geom_smooth(method = lm, se = FALSE, col = 'darkgray')
+
+# Remove age effect, use the residual.  Note the intercept is in these 
+# models as well.
+dat$rt_age_adjusted = lm(rt ~ age, dat)$resid
+dat$caffeine_age_adjusted = lm(caffeine ~ age, dat)$resid
+ggplot(dat, aes(x = caffeine_age_adjusted, y = rt_age_adjusted)) +
+  geom_point()+ 
+  geom_smooth(method = lm, se = FALSE, col = 'darkgray')
+
+# For funsies, you can see the parameter estimate using the residuals is 
+# exactly the same as the original model
+# the only reason the se and p-value are off is because this model doesn't 
+# realize I already spent 2DF estimating the mean and age effects!
+
+#unadjusted model
+summary(lm(rt ~ caffeine, dat))
+
+#original model
+summary(lm(rt ~ caffeine + age, dat))
+
+# residual model
+summary(lm(rt_age_adjusted ~ caffeine_age_adjusted, dat))
+
+```

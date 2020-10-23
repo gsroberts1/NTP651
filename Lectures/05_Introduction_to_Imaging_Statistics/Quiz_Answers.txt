@@ -1,0 +1,5 @@
+The interpretation of B0 without mean centering is simply the y-intercept, or the mean BOLD response when the regressor (IQ) is 0. This BOLD response is likely out of the IQ range of this study and would not be of interest. B0 with mean centering would signify the mean BOLD response at the mean IQ level, which is of much more interest to researchers. B1 with and without mean centering would remain the same because we are simply shifting the regression along the regressor axis.
+If other covariates that aren't being modelled, they may be directly influencing your measured outcome (like reaction time). This will lead to increases variability in our regression, because the model has no way of knowing how other covariates are affecting the measured outcomes and will appear as measured variance.
+c=[0, 0, 1]
+Is the overall mean greater than 0.
+We know that the mean of group one is B0 + B1 and the mean of group 2 is B0 - B1. Thus B0 is the average between the two means, and B1 is the +- difference between the B0 parameter.
